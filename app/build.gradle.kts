@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.batterybossadmin.xkqvrz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 2
+    versionName = (project.findProperty("appVersionName") as String?) ?: "1.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
