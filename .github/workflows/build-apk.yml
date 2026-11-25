@@ -29,6 +29,14 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses & install API 36.1
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platform-tools" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0"
+
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -41,10 +49,13 @@ jobs:
           path: debug.keystore
           key: battery-boss-admin-debug-keystore-v1
 
-      - name: Prepare debug signing keystore
+      - name: Prepare debug signing keystore and env files
         env:
           KEYSTORE_SECRET_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          [ -f .env.example ] || touch .env.example
+          [ -f .env ] || cp .env.example .env
+
           if [ -n "$KEYSTORE_SECRET_B64" ]; then
             echo "$KEYSTORE_SECRET_B64" | base64 -di > debug.keystore
             echo "Decoded signing keystore from GitHub secret ANDROID_KEYSTORE_BASE64"
@@ -73,7 +84,10 @@ jobs:
           gradle :app:assembleDebug \
             -PappVersionCode="$VERSION_CODE" \
             -PappVersionName="$VERSION_NAME" \
-            --no-daemon
+            -Dorg.gradle.jvmargs="-Xmx3g -Dfile.encoding=UTF-8" \
+            -Dorg.gradle.workers.max=2 \
+            --no-daemon \
+            --stacktrace
 
       - name: Prepare downloadable APK file
         run: |
@@ -97,6 +111,7 @@ jobs:
 
             Download `BatteryBossAdmin.apk` from Assets below.
           files: release-output/BatteryBossAdmin.apk
+          fail_on_unmatched_files: true
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
