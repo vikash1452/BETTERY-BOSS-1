@@ -34,14 +34,36 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare consistent debug signing keystore
+      - name: Restore cached debug keystore
+        id: cache-keystore
+        uses: actions/cache@v4
+        with:
+          path: debug.keystore
+          key: battery-boss-admin-debug-keystore-v1
+
+      - name: Prepare debug signing keystore
+        env:
+          KEYSTORE_SECRET_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -f debug.keystore.base64 ] && [ -s debug.keystore.base64 ]; then
+          if [ -n "$KEYSTORE_SECRET_B64" ]; then
+            echo "$KEYSTORE_SECRET_B64" | base64 -di > debug.keystore
+            echo "Decoded signing keystore from GitHub secret ANDROID_KEYSTORE_BASE64"
+          elif [ -f debug.keystore.base64 ] && [ -s debug.keystore.base64 ]; then
             base64 -di debug.keystore.base64 > debug.keystore
-            echo "Decoded consistent signing key from debug.keystore.base64"
+            echo "Decoded signing keystore from debug.keystore.base64"
+          elif [ -f debug.keystore ] && [ -s debug.keystore ]; then
+            echo "Reusing cached debug.keystore"
           else
-            echo "::error::debug.keystore.base64 is missing! Push debug.keystore.base64 so every build keeps the same signing signature and avoids package conflicts."
-            exit 1
+            keytool -genkeypair -v -noprompt \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Battery Boss Admin,O=BatteryBoss,C=IN"
+            echo "Generated new debug.keystore (will be cached for future builds)"
           fi
 
       - name: Build Debug APK
@@ -74,7 +96,6 @@ jobs:
             Automated Android APK build (`v1.${{ github.run_number }}`) for **Battery Boss Update Control**.
 
             Download `BatteryBossAdmin.apk` from Assets below.
-            If you previously installed an older APK signed with a different key, uninstall the old **Battery Boss Admin** app once before installing this APK — all future GitHub builds will update smoothly in place.
           files: release-output/BatteryBossAdmin.apk
           make_latest: true
         env:
