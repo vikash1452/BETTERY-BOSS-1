@@ -1,5 +1,7 @@
 package com.example.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -33,6 +35,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DownloadForOffline
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Notes
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
@@ -81,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -114,15 +119,20 @@ fun AdminDashboard(
     onSaveToFirebaseClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onResetUrlClick: () -> Unit,
+    onFetchGitHubRelease: (String, () -> Unit) -> Unit,
+    onClearGitHubFetchError: () -> Unit,
     onRulesCopied: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showResetConfirmDialog by rememberSaveable { mutableStateOf(false) }
     var showRulesSheet by rememberSaveable { mutableStateOf(false) }
+    var showGitHubDialog by rememberSaveable { mutableStateOf(false) }
+    var githubRepoInput by rememberSaveable { mutableStateOf("") }
 
     val scrollState = rememberScrollState()
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val rulesCopiedMessage = stringResource(R.string.rules_copied)
 
     val displayHost = uiState.savedDatabaseUrl
@@ -460,6 +470,31 @@ fun AdminDashboard(
                                     tint = MaterialTheme.colorScheme.tertiary
                                 )
                             },
+                            trailingIcon = {
+                                val trimmedUrl = uiState.apkUrl.trim()
+                                if (trimmedUrl.startsWith("https://", ignoreCase = true) ||
+                                    trimmedUrl.startsWith("http://", ignoreCase = true)
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, Uri.parse(trimmedUrl))
+                                                )
+                                            }.onFailure {
+                                                onRulesCopied("Could not open APK URL")
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("test_download_apk_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.OpenInNew,
+                                            contentDescription = stringResource(R.string.cd_test_download_apk),
+                                            tint = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    }
+                                }
+                            },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                             shape = MaterialTheme.shapes.small,
@@ -468,6 +503,33 @@ fun AdminDashboard(
                                 .fillMaxWidth()
                                 .testTag("apk_url_input")
                         )
+
+                        // Quick Import from GitHub Releases
+                        OutlinedButton(
+                            onClick = {
+                                onClearGitHubFetchError()
+                                showGitHubDialog = true
+                            },
+                            shape = MaterialTheme.shapes.small,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("fetch_github_release_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.CloudDownload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.dashboard_github_fetch_cta),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                     }
                 }
 
@@ -706,6 +768,100 @@ fun AdminDashboard(
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirmDialog = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    // Import Latest APK from GitHub Releases Dialog
+    if (showGitHubDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!uiState.isFetchingGitHubRelease) {
+                    showGitHubDialog = false
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = {
+                Text(
+                    text = stringResource(R.string.dialog_github_title),
+                    style = MaterialTheme.typography.titleLarge
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.dialog_github_subtitle),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = githubRepoInput,
+                        onValueChange = {
+                            githubRepoInput = it
+                            onClearGitHubFetchError()
+                        },
+                        label = { Text(stringResource(R.string.dialog_github_repo_label)) },
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.dialog_github_repo_placeholder),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = JetBrainsMonoFontFamily
+                                )
+                            )
+                        },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = JetBrainsMonoFontFamily
+                        ),
+                        singleLine = true,
+                        isError = uiState.githubFetchError != null,
+                        shape = MaterialTheme.shapes.small,
+                        colors = dashboardTextFieldColors(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("github_repo_input")
+                    )
+                    if (uiState.githubFetchError != null) {
+                        Text(
+                            text = uiState.githubFetchError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = githubRepoInput.isNotBlank() && !uiState.isFetchingGitHubRelease,
+                    onClick = {
+                        onFetchGitHubRelease(githubRepoInput) {
+                            showGitHubDialog = false
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm_github_fetch_button")
+                ) {
+                    if (uiState.isFetchingGitHubRelease) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.dialog_github_fetching))
+                    } else {
+                        Text(
+                            text = stringResource(R.string.dialog_github_fetch_button),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !uiState.isFetchingGitHubRelease,
+                    onClick = { showGitHubDialog = false }
+                ) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
             }

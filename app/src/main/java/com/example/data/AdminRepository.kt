@@ -362,6 +362,96 @@ class AdminRepository(
         prefs.clearDatabaseUrl()
     }
 
+    /**
+     * Fetches the latest public GitHub Release for a repository (accepts "owner/repo" or full
+     * "https://github.com/owner/repo" URL) and extracts the direct .apk browser_download_url.
+     */
+    suspend fun fetchLatestGitHubRelease(repoInput: String): Result<GitHubReleaseInfo> =
+        withContext(Dispatchers.IO) {
+            val cleanedPath = repoInput.trim()
+                .removePrefix("https://github.com/")
+                .removePrefix("http://github.com/")
+                .removePrefix("github.com/")
+                .trim('/')
+                .removeSuffix(".git")
+
+            val parts = cleanedPath.split("/").filter { it.isNotBlank() }
+            if (parts.size < 2) {
+                return@withContext Result.failure(
+                    IllegalArgumentException("Enter repository as owner/repo (e.g. username/battery-boss)")
+                )
+            }
+            val owner = parts[0]
+            val repo = parts[1]
+            val apiUrl = "https://api.github.com/repos/$owner/$repo/releases/latest"
+
+            val request = Request.Builder()
+                .url(apiUrl)
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "BatteryBossAdmin-Android")
+                .get()
+                .build()
+
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    when {
+                        response.isSuccessful -> {
+                            val json = JSONObject(body)
+                            val tag = json.optString("tag_name", "").trim()
+                            val cleanVersion = tag.removePrefix("v").removePrefix("V")
+                            val releaseTitle = json.optString("name", "").trim()
+                                .ifBlank { "Update $tag".trim() }
+                            val notes = json.optString("body", "").trim()
+                            val assets = json.optJSONArray("assets")
+
+                            var apkUrl = ""
+                            var apkName = ""
+                            if (assets != null) {
+                                for (i in 0 until assets.length()) {
+                                    val asset = assets.optJSONObject(i) ?: continue
+                                    val name = asset.optString("name", "")
+                                    val downloadUrl = asset.optString("browser_download_url", "")
+                                    if (name.endsWith(".apk", ignoreCase = true) && downloadUrl.isNotBlank()) {
+                                        apkUrl = downloadUrl
+                                        apkName = name
+                                        break
+                                    }
+                                }
+                            }
+
+                            if (apkUrl.isBlank()) {
+                                Result.failure(
+                                    IOException("Latest release ($tag) has no .apk file attached in Assets.")
+                                )
+                            } else {
+                                Result.success(
+                                    GitHubReleaseInfo(
+                                        version = cleanVersion.ifBlank { tag },
+                                        title = releaseTitle,
+                                        description = notes,
+                                        apkDownloadUrl = apkUrl,
+                                        assetFileName = apkName
+                                    )
+                                )
+                            }
+                        }
+                        response.code == 404 -> Result.failure(
+                            IOException("No public release found for $owner/$repo. Publish a Release with an .apk asset first.")
+                        )
+                        response.code == 403 -> Result.failure(
+                            IOException("GitHub API rate limit reached or repository is private (HTTP 403).")
+                        )
+                        else -> Result.failure(
+                            IOException("GitHub API error (HTTP ${response.code}).")
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Result.failure(IOException("Could not fetch GitHub release: ${e.localizedMessage ?: "network error"}"))
+            }
+        }
+
     private fun parseDataSnapshot(snapshot: DataSnapshot): UpdateConfig {
         if (!snapshot.exists()) return UpdateConfig()
         val enabledValue = snapshot.child(FirebaseConstants.FIELD_ENABLED).getValue(Boolean::class.java)

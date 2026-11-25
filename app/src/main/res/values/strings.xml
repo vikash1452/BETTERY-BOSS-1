@@ -37,7 +37,14 @@
     <string name="dashboard_description_label">Description / Changelog</string>
     <string name="dashboard_description_placeholder">• Faster battery health diagnostics\n• Dark mode UI polish\n• Critical bug fixes</string>
     <string name="dashboard_apk_url_label">APK Download URL</string>
-    <string name="dashboard_apk_url_placeholder">https://example.com/releases/battery-boss-v2.0.apk</string>
+    <string name="dashboard_apk_url_placeholder">https://github.com/user/repo/releases/download/v2.0/app.apk</string>
+    <string name="dashboard_github_fetch_cta">Fetch from GitHub Release</string>
+    <string name="dialog_github_title">Import GitHub Release APK</string>
+    <string name="dialog_github_subtitle">Enter a public GitHub repo (owner/repo or full URL) to automatically fill the latest .apk download link, version, and notes.</string>
+    <string name="dialog_github_repo_label">GitHub Repository</string>
+    <string name="dialog_github_repo_placeholder">username/battery-boss</string>
+    <string name="dialog_github_fetch_button">Fetch APK</string>
+    <string name="dialog_github_fetching">Fetching…</string>
     <string name="dashboard_mandatory_title">Mandatory Update (Force)</string>
     <string name="dashboard_mandatory_subtitle">Block app usage until users install this release</string>
     <string name="dashboard_save_button">Save to Firebase</string>
@@ -61,4 +68,5 @@
     <string name="cd_view_rules">View Firebase security rules</string>
     <string name="cd_pick_date">Pick release date</string>
     <string name="cd_reset_url">Reset Firebase Database URL</string>
+    <string name="cd_test_download_apk">Open APK URL to test download</string>
 </resources>

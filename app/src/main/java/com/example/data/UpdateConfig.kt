@@ -30,6 +30,14 @@ data class SyncSnapshot(
     val errorMessage: String? = null
 )
 
+data class GitHubReleaseInfo(
+    val version: String,
+    val title: String,
+    val description: String,
+    val apkDownloadUrl: String,
+    val assetFileName: String
+)
+
 object FirebaseConstants {
     const val UPDATE_NODE_PATH = "battery_boss_update"
 

@@ -89,6 +89,8 @@ fun BatteryBossAdminApp(
                     onSaveToFirebaseClick = viewModel::saveToFirebase,
                     onRefreshClick = viewModel::refreshFromFirebase,
                     onResetUrlClick = viewModel::resetFirebaseUrl,
+                    onFetchGitHubRelease = viewModel::fetchGitHubReleaseApk,
+                    onClearGitHubFetchError = viewModel::clearGitHubFetchError,
                     onRulesCopied = viewModel::notifyMessage
                 )
             }

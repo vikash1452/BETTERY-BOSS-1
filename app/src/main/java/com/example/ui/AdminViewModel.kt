@@ -49,6 +49,8 @@ data class AdminUiState(
     val hasUnsavedChanges: Boolean = false,
     val isRefreshing: Boolean = false,
     val isSaving: Boolean = false,
+    val isFetchingGitHubRelease: Boolean = false,
+    val githubFetchError: String? = null,
     val snackbarMessage: String? = null
 )
 
@@ -324,6 +326,43 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                 snackbarMessage = "Firebase URL cleared. Enter a new endpoint."
             )
         }
+    }
+
+    fun fetchGitHubReleaseApk(repoInput: String, onSuccess: () -> Unit) {
+        if (_uiState.value.isFetchingGitHubRelease) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isFetchingGitHubRelease = true, githubFetchError = null) }
+            val result = repository.fetchLatestGitHubRelease(repoInput)
+            result.fold(
+                onSuccess = { release ->
+                    _uiState.update { state ->
+                        state.copy(
+                            isFetchingGitHubRelease = false,
+                            githubFetchError = null,
+                            apkUrl = release.apkDownloadUrl,
+                            version = release.version.ifBlank { state.version },
+                            title = release.title.ifBlank { state.title },
+                            description = release.description.ifBlank { state.description },
+                            hasUnsavedChanges = true,
+                            snackbarMessage = "Imported ${release.assetFileName} from GitHub"
+                        )
+                    }
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isFetchingGitHubRelease = false,
+                            githubFetchError = error.message ?: "Failed to fetch GitHub release"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun clearGitHubFetchError() {
+        _uiState.update { it.copy(githubFetchError = null) }
     }
 
     fun clearSnackbar() {
