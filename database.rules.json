@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "battery_boss_update": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

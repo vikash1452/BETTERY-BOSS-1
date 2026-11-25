@@ -1,0 +1,64 @@
+<resources>
+    <string name="app_name">Battery Boss Admin</string>
+    <string name="app_full_title">Battery Boss Update Control</string>
+    <string name="app_subtitle">Private Release Control Panel</string>
+
+    <!-- Setup Screen -->
+    <string name="setup_badge">FIRST-TIME SETUP</string>
+    <string name="setup_title">Connect Firebase RTDB</string>
+    <string name="setup_description">Enter your Firebase Realtime Database URL once. It is saved on this device so future launches open directly to your Admin Dashboard.</string>
+    <string name="setup_url_label">Firebase Database URL</string>
+    <string name="setup_url_placeholder">https://admin-50dca-default-rtdb.firebaseio.com</string>
+    <string name="setup_connect_button">Connect</string>
+    <string name="setup_connecting">Connecting to Firebase…</string>
+    <string name="setup_path_note">Target Path: /battery_boss_update/</string>
+
+    <!-- Admin Dashboard -->
+    <string name="dashboard_connected">LIVE</string>
+    <string name="dashboard_connecting">SYNCING</string>
+    <string name="dashboard_disconnected">OFFLINE</string>
+    <string name="dashboard_total_clicks_label">TOTAL DOWNLOAD CLICKS</string>
+    <string name="dashboard_update_switch_title">Update Broadcast</string>
+    <string name="dashboard_update_active">Active — Users receive update prompt</string>
+    <string name="dashboard_update_paused">Paused — Update dialog hidden</string>
+    <string name="dashboard_release_config_header">RELEASE CONFIGURATION</string>
+    <string name="dashboard_version_label">Version</string>
+    <string name="dashboard_version_placeholder">2.0</string>
+    <string name="dashboard_release_date_label">Scheduled Release Date</string>
+    <string name="dashboard_release_date_placeholder">Pick scheduled date</string>
+    <string name="dashboard_release_schedule_header">RELEASE SCHEDULE</string>
+    <string name="dashboard_release_immediately">Release Immediately</string>
+    <string name="dashboard_schedule_for_date">Schedule for Date</string>
+    <string name="dashboard_immediate_hint">Goes live as soon as saved (releaseDateMillis = 0)</string>
+    <string name="dashboard_scheduled_future_badge">SCHEDULED</string>
+    <string name="dashboard_scheduled_active_badge">DATE REACHED</string>
+    <string name="dashboard_title_label">Update Title</string>
+    <string name="dashboard_title_placeholder">Battery Boss v2.0 is Here</string>
+    <string name="dashboard_description_label">Description / Changelog</string>
+    <string name="dashboard_description_placeholder">• Faster battery health diagnostics\n• Dark mode UI polish\n• Critical bug fixes</string>
+    <string name="dashboard_apk_url_label">APK Download URL</string>
+    <string name="dashboard_apk_url_placeholder">https://example.com/releases/battery-boss-v2.0.apk</string>
+    <string name="dashboard_mandatory_title">Mandatory Update (Force)</string>
+    <string name="dashboard_mandatory_subtitle">Block app usage until users install this release</string>
+    <string name="dashboard_save_button">Save to Firebase</string>
+    <string name="dashboard_saving">Publishing to Firebase…</string>
+    <string name="dashboard_reset_url_button">Reset Firebase URL</string>
+
+    <!-- Dialogs & Sheets -->
+    <string name="dialog_reset_title">Reset Firebase URL?</string>
+    <string name="dialog_reset_message">This removes the saved Firebase Realtime Database URL from this device and returns to the Setup Screen.</string>
+    <string name="dialog_confirm_reset">Reset</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_date_confirm">Select</string>
+    <string name="rules_sheet_title">Firebase Security Rules</string>
+    <string name="rules_sheet_subtitle">Paste into Firebase Console → Realtime Database → Rules</string>
+    <string name="rules_copy_button">Copy Rules JSON</string>
+    <string name="rules_copied">Security rules copied to clipboard</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_header_banner">Battery Boss command center header background</string>
+    <string name="cd_refresh_data">Refresh data from Firebase</string>
+    <string name="cd_view_rules">View Firebase security rules</string>
+    <string name="cd_pick_date">Pick release date</string>
+    <string name="cd_reset_url">Reset Firebase Database URL</string>
+</resources>
