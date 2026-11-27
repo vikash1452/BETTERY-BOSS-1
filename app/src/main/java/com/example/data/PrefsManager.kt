@@ -41,7 +41,15 @@ class PrefsManager(context: Context) {
             ) {
                 cleaned = "https://$cleaned"
             }
-            return cleaned.trimEnd('/')
+            cleaned = cleaned.trimEnd('/')
+            if (cleaned.endsWith(".json", ignoreCase = true)) {
+                cleaned = cleaned.dropLast(5).trimEnd('/')
+            }
+            val nodeSuffix = "/${FirebaseConstants.UPDATE_NODE_PATH}"
+            if (cleaned.endsWith(nodeSuffix, ignoreCase = true)) {
+                cleaned = cleaned.dropLast(nodeSuffix.length).trimEnd('/')
+            }
+            return cleaned
         }
 
         fun isValidFirebaseRtdbUrl(raw: String): Boolean {

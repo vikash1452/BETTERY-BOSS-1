@@ -78,20 +78,29 @@ fun BatteryBossAdminApp(
 
                 AdminScreen.Dashboard -> AdminDashboard(
                     uiState = uiState,
-                    onUpdateEnabledChange = viewModel::onUpdateEnabledChanged,
-                    onVersionChange = viewModel::onVersionChanged,
+                    onTabSelected = viewModel::onTabSelected,
+                    onUpdateConfig = viewModel::updateConfig,
+                    onUpdateUiConfig = viewModel::updateUiConfig,
                     onTitleChange = viewModel::onTitleChanged,
                     onDescriptionChange = viewModel::onDescriptionChanged,
-                    onApkUrlChange = viewModel::onApkUrlChanged,
                     onReleaseImmediatelySelected = viewModel::onReleaseImmediatelySelected,
                     onReleaseDateSelected = viewModel::onReleaseDateSelected,
-                    onMandatoryChange = viewModel::onMandatoryChanged,
+                    onUpsertExtraButton = viewModel::upsertExtraButton,
+                    onDeleteExtraButton = viewModel::deleteExtraButton,
+                    onMoveExtraButton = viewModel::moveExtraButton,
+                    onToggleCustomBlockOrder = viewModel::toggleCustomBlockOrder,
+                    onAddUiBlock = viewModel::addUiBlock,
+                    onRemoveUiBlock = viewModel::removeUiBlock,
+                    onMoveUiBlock = viewModel::moveUiBlock,
+                    onApplyPreset = viewModel::applyPreset,
+                    onResetUiToDefault = viewModel::resetUiToDefault,
+                    onDisableDialogQuickly = viewModel::disableDialogQuickly,
                     onSaveToFirebaseClick = viewModel::saveToFirebase,
                     onRefreshClick = viewModel::refreshFromFirebase,
                     onResetUrlClick = viewModel::resetFirebaseUrl,
                     onFetchGitHubRelease = viewModel::fetchGitHubReleaseApk,
                     onClearGitHubFetchError = viewModel::clearGitHubFetchError,
-                    onRulesCopied = viewModel::notifyMessage
+                    onNotify = viewModel::notifyMessage
                 )
             }
         }
@@ -101,7 +110,7 @@ fun BatteryBossAdminApp(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 72.dp)
         ) { data ->
             Snackbar(
                 snackbarData = data,

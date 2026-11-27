@@ -1,7 +1,5 @@
 package com.example.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -15,9 +13,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,31 +28,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.DownloadForOffline
-import androidx.compose.material.icons.rounded.FlashOn
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LinkOff
-import androidx.compose.material.icons.rounded.NewReleases
-import androidx.compose.material.icons.rounded.Notes
-import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.PowerOff
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material.icons.rounded.Tag
-import androidx.compose.material.icons.rounded.Title
-import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,10 +55,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -85,54 +73,70 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.data.ConnectionStatus
+import com.example.data.DialogButtonConfig
+import com.example.data.DialogPreset
+import com.example.data.DialogUiConfig
 import com.example.data.FirebaseConstants
+import com.example.data.UpdateConfig
+import com.example.ui.components.ColorsAndThemeTab
+import com.example.ui.components.CustomBlockOrderingCard
+import com.example.ui.components.DialogPreviewPane
+import com.example.ui.components.ExtraButtonsBuilderCard
+import com.example.ui.components.LayoutAndMediaTab
+import com.example.ui.components.ModeAndContentTab
+import com.example.ui.components.PrimaryAndDismissButtonsCard
+import com.example.ui.components.adminTextFieldColors
 import com.example.ui.theme.JetBrainsMonoFontFamily
-import java.text.NumberFormat
 import java.util.Calendar
-import java.util.Locale
 import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboard(
     uiState: AdminUiState,
-    onUpdateEnabledChange: (Boolean) -> Unit,
-    onVersionChange: (String) -> Unit,
+    onTabSelected: (DashboardTab) -> Unit,
+    onUpdateConfig: ((UpdateConfig) -> UpdateConfig) -> Unit,
+    onUpdateUiConfig: ((DialogUiConfig) -> DialogUiConfig) -> Unit,
     onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
-    onApkUrlChange: (String) -> Unit,
     onReleaseImmediatelySelected: () -> Unit,
     onReleaseDateSelected: (Long) -> Unit,
-    onMandatoryChange: (Boolean) -> Unit,
+    onUpsertExtraButton: (DialogButtonConfig, Int?) -> Unit,
+    onDeleteExtraButton: (Int) -> Unit,
+    onMoveExtraButton: (Int, Int) -> Unit,
+    onToggleCustomBlockOrder: (Boolean) -> Unit,
+    onAddUiBlock: (String) -> Unit,
+    onRemoveUiBlock: (Int) -> Unit,
+    onMoveUiBlock: (Int, Int) -> Unit,
+    onApplyPreset: (DialogPreset) -> Unit,
+    onResetUiToDefault: () -> Unit,
+    onDisableDialogQuickly: () -> Unit,
     onSaveToFirebaseClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onResetUrlClick: () -> Unit,
     onFetchGitHubRelease: (String, () -> Unit) -> Unit,
     onClearGitHubFetchError: () -> Unit,
-    onRulesCopied: (String) -> Unit,
+    onNotify: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showResetConfirmDialog by rememberSaveable { mutableStateOf(false) }
     var showRulesSheet by rememberSaveable { mutableStateOf(false) }
+    var showPreviewSheet by rememberSaveable { mutableStateOf(false) }
     var showGitHubDialog by rememberSaveable { mutableStateOf(false) }
     var githubRepoInput by rememberSaveable { mutableStateOf("") }
 
-    val scrollState = rememberScrollState()
     val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
     val rulesCopiedMessage = stringResource(R.string.rules_copied)
 
     val displayHost = uiState.savedDatabaseUrl
@@ -140,575 +144,204 @@ fun AdminDashboard(
         .removePrefix("http://")
         .substringBefore("/")
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        Column(
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            StickySaveBottomBar(
+                isSaving = uiState.isSaving,
+                hasUnsavedChanges = uiState.hasUnsavedChanges,
+                onSaveClick = onSaveToFirebaseClick,
+                onPreviewClick = { showPreviewSheet = true }
+            )
+        }
+    ) { innerPadding ->
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(scrollState)
-                .imePadding()
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
-            // Top Telemetry Header
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.img_command_header),
-                    contentDescription = stringResource(R.string.cd_header_banner),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .alpha(0.45f)
-                )
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                    MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
-                                    MaterialTheme.colorScheme.background
-                                )
-                            )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 640.dp)
-                        .align(Alignment.Center)
-                        .statusBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        ConnectionStatusPill(status = uiState.connectionStatus)
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            IconButton(
-                                onClick = onRefreshClick,
-                                enabled = !uiState.isRefreshing,
-                                modifier = Modifier.testTag("refresh_button")
-                            ) {
-                                if (uiState.isRefreshing) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Refresh,
-                                        contentDescription = stringResource(R.string.cd_refresh_data),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = { showRulesSheet = true },
-                                modifier = Modifier.testTag("view_rules_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Shield,
-                                    contentDescription = stringResource(R.string.cd_view_rules),
-                                    tint = MaterialTheme.colorScheme.tertiary
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = stringResource(R.string.app_full_title),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "$displayHost/${FirebaseConstants.UPDATE_NODE_PATH}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+            val isWideScreen = maxWidth >= 840.dp
+            val editorTabs = if (isWideScreen) {
+                DashboardTab.entries.filter { it != DashboardTab.LIVE_PREVIEW }
+            } else {
+                DashboardTab.entries
+            }
+            val activeTab = if (isWideScreen && uiState.selectedTab == DashboardTab.LIVE_PREVIEW) {
+                DashboardTab.MODE_CONTENT
+            } else {
+                uiState.selectedTab
             }
 
-            // Main Dashboard Content
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 640.dp)
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Telemetry KPI Card: Total Download Clicks
-                DownloadClicksTelemetryCard(
-                    downloadClicks = uiState.downloadClicks,
-                    modifier = Modifier.fillMaxWidth()
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                DashboardTopHeader(
+                    status = uiState.connectionStatus,
+                    endpointLabel = "$displayHost/${FirebaseConstants.UPDATE_NODE_PATH}",
+                    isRefreshing = uiState.isRefreshing,
+                    onRefreshClick = onRefreshClick,
+                    onRulesClick = { showRulesSheet = true },
+                    onQuickPreviewClick = { showPreviewSheet = true },
+                    onResetUrlClick = { showResetConfirmDialog = true }
                 )
 
-                // Master Update ON/OFF Switch Card
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = if (uiState.isEnabled) {
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainer
-                    },
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (uiState.isEnabled) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        }
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                // Main Content Area
+                if (isWideScreen) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onUpdateEnabledChange(!uiState.isEnabled) }
-                            .padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier.weight(1f)
+                        Column(
+                            modifier = Modifier
+                                .weight(0.58f)
+                                .fillMaxHeight()
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (uiState.isEnabled) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh
-                                },
-                                modifier = Modifier.size(44.dp)
+                            PresetsAndQuickActionsStrip(
+                                onApplyPreset = onApplyPreset,
+                                onResetUiToDefault = onResetUiToDefault,
+                                onDisableDialogQuickly = onDisableDialogQuickly
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DashboardTabsRow(
+                                tabs = editorTabs,
+                                selectedTab = activeTab,
+                                onTabSelected = onTabSelected
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .imePadding(),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PowerSettingsNew,
-                                        contentDescription = null,
-                                        tint = if (uiState.isEnabled) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        }
-                                    )
-                                }
-                            }
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.dashboard_update_switch_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (uiState.isEnabled) {
-                                        stringResource(R.string.dashboard_update_active)
-                                    } else {
-                                        stringResource(R.string.dashboard_update_paused)
+                                EditorTabBody(
+                                    tab = activeTab,
+                                    uiState = uiState,
+                                    onUpdateConfig = onUpdateConfig,
+                                    onUpdateUiConfig = onUpdateUiConfig,
+                                    onTitleChange = onTitleChange,
+                                    onDescriptionChange = onDescriptionChange,
+                                    onReleaseImmediatelySelected = onReleaseImmediatelySelected,
+                                    onPickScheduledDateClick = { showDatePicker = true },
+                                    onOpenGitHubDialog = {
+                                        onClearGitHubFetchError()
+                                        showGitHubDialog = true
                                     },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.isEnabled) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
+                                    onUpsertExtraButton = onUpsertExtraButton,
+                                    onDeleteExtraButton = onDeleteExtraButton,
+                                    onMoveExtraButton = onMoveExtraButton,
+                                    onToggleCustomBlockOrder = onToggleCustomBlockOrder,
+                                    onAddUiBlock = onAddUiBlock,
+                                    onRemoveUiBlock = onRemoveUiBlock,
+                                    onMoveUiBlock = onMoveUiBlock,
+                                    onNotify = onNotify
                                 )
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
 
-                        Switch(
-                            checked = uiState.isEnabled,
-                            onCheckedChange = onUpdateEnabledChange,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                            modifier = Modifier.testTag("update_enabled_switch")
-                        )
-                    }
-                }
-
-                // Release Configuration Form Card
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(
+                            modifier = Modifier
+                                .weight(0.42f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.NewReleases,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.dashboard_release_config_header),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            DialogPreviewPane(config = uiState.config)
                         }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 8.dp)
+                    ) {
+                        PresetsAndQuickActionsStrip(
+                            onApplyPreset = onApplyPreset,
+                            onResetUiToDefault = onResetUiToDefault,
+                            onDisableDialogQuickly = onDisableDialogQuickly,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        DashboardTabsRow(
+                            tabs = editorTabs,
+                            selectedTab = activeTab,
+                            onTabSelected = onTabSelected,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .imePadding()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            EditorTabBody(
+                                tab = activeTab,
+                                uiState = uiState,
+                                onUpdateConfig = onUpdateConfig,
+                                onUpdateUiConfig = onUpdateUiConfig,
+                                onTitleChange = onTitleChange,
+                                onDescriptionChange = onDescriptionChange,
+                                onReleaseImmediatelySelected = onReleaseImmediatelySelected,
+                                onPickScheduledDateClick = { showDatePicker = true },
+                                onOpenGitHubDialog = {
+                                    onClearGitHubFetchError()
+                                    showGitHubDialog = true
+                                },
+                                onUpsertExtraButton = onUpsertExtraButton,
+                                onDeleteExtraButton = onDeleteExtraButton,
+                                onMoveExtraButton = onMoveExtraButton,
+                                onToggleCustomBlockOrder = onToggleCustomBlockOrder,
+                                onAddUiBlock = onAddUiBlock,
+                                onRemoveUiBlock = onRemoveUiBlock,
+                                onMoveUiBlock = onMoveUiBlock,
+                                onNotify = onNotify
+                            )
 
-                        // Version
-                        OutlinedTextField(
-                            value = uiState.version,
-                            onValueChange = onVersionChange,
-                            label = { Text(stringResource(R.string.dashboard_version_label)) },
-                            placeholder = { Text(stringResource(R.string.dashboard_version_placeholder)) },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                fontFamily = JetBrainsMonoFontFamily,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            leadingIcon = {
+                            OutlinedButton(
+                                onClick = { showResetConfirmDialog = true },
+                                shape = MaterialTheme.shapes.small,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.55f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("reset_url_button")
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.Tag,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    imageVector = Icons.Rounded.LinkOff,
+                                    contentDescription = stringResource(R.string.cd_reset_url),
+                                    tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(18.dp)
                                 )
-                            },
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.small,
-                            colors = dashboardTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("version_input")
-                        )
-
-                        // Title
-                        OutlinedTextField(
-                            value = uiState.title,
-                            onValueChange = onTitleChange,
-                            label = { Text(stringResource(R.string.dashboard_title_label)) },
-                            placeholder = { Text(stringResource(R.string.dashboard_title_placeholder)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Title,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.small,
-                            colors = dashboardTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("title_input")
-                        )
-
-                        // Description (Multi-line)
-                        OutlinedTextField(
-                            value = uiState.description,
-                            onValueChange = onDescriptionChange,
-                            label = { Text(stringResource(R.string.dashboard_description_label)) },
-                            placeholder = { Text(stringResource(R.string.dashboard_description_placeholder)) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Notes,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            minLines = 4,
-                            maxLines = 7,
-                            shape = MaterialTheme.shapes.small,
-                            colors = dashboardTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("description_input")
-                        )
-
-                        // APK Download URL
-                        OutlinedTextField(
-                            value = uiState.apkUrl,
-                            onValueChange = onApkUrlChange,
-                            label = { Text(stringResource(R.string.dashboard_apk_url_label)) },
-                            placeholder = {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = stringResource(R.string.dashboard_apk_url_placeholder),
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontFamily = JetBrainsMonoFontFamily
-                                    )
-                                )
-                            },
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = JetBrainsMonoFontFamily
-                            ),
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Rounded.Link,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.tertiary
-                                )
-                            },
-                            trailingIcon = {
-                                val trimmedUrl = uiState.apkUrl.trim()
-                                if (trimmedUrl.startsWith("https://", ignoreCase = true) ||
-                                    trimmedUrl.startsWith("http://", ignoreCase = true)
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            runCatching {
-                                                context.startActivity(
-                                                    Intent(Intent.ACTION_VIEW, Uri.parse(trimmedUrl))
-                                                )
-                                            }.onFailure {
-                                                onRulesCopied("Could not open APK URL")
-                                            }
-                                        },
-                                        modifier = Modifier.testTag("test_download_apk_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.OpenInNew,
-                                            contentDescription = stringResource(R.string.cd_test_download_apk),
-                                            tint = MaterialTheme.colorScheme.tertiary
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                            shape = MaterialTheme.shapes.small,
-                            colors = dashboardTextFieldColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("apk_url_input")
-                        )
-
-                        // Quick Import from GitHub Releases
-                        OutlinedButton(
-                            onClick = {
-                                onClearGitHubFetchError()
-                                showGitHubDialog = true
-                            },
-                            shape = MaterialTheme.shapes.small,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("fetch_github_release_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.CloudDownload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = stringResource(R.string.dashboard_github_fetch_cta),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                    }
-                }
-
-                // Release Schedule Card: Release Immediately vs Schedule for Date
-                ReleaseScheduleCard(
-                    releaseDate = uiState.releaseDate,
-                    releaseDateMillis = uiState.releaseDateMillis,
-                    onReleaseImmediatelyClick = onReleaseImmediatelySelected,
-                    onPickScheduledDateClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Mandatory (Force Update) Toggle Card
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = if (uiState.isMandatory) {
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainer
-                    },
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (uiState.isMandatory) {
-                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.65f)
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        }
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onMandatoryChange(!uiState.isMandatory) }
-                            .padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (uiState.isMandatory) {
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh
-                                },
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.WarningAmber,
-                                        contentDescription = null,
-                                        tint = if (uiState.isMandatory) {
-                                            MaterialTheme.colorScheme.secondary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        }
-                                    )
-                                }
-                            }
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.dashboard_mandatory_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = stringResource(R.string.dashboard_mandatory_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.isMandatory) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
+                                    text = stringResource(R.string.dashboard_reset_url_button),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.error
                                 )
                             }
+
+                            Spacer(modifier = Modifier.height(14.dp))
                         }
-
-                        Switch(
-                            checked = uiState.isMandatory,
-                            onCheckedChange = onMandatoryChange,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                                checkedTrackColor = MaterialTheme.colorScheme.secondary,
-                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                            modifier = Modifier.testTag("mandatory_update_switch")
-                        )
                     }
                 }
-
-                // Primary Save Button
-                Button(
-                    onClick = onSaveToFirebaseClick,
-                    enabled = !uiState.isSaving,
-                    shape = MaterialTheme.shapes.medium,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .testTag("save_to_firebase_button")
-                ) {
-                    if (uiState.isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.5.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = stringResource(R.string.dashboard_saving),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.CloudUpload,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (uiState.hasUnsavedChanges) {
-                                "${stringResource(R.string.dashboard_save_button)} •"
-                            } else {
-                                stringResource(R.string.dashboard_save_button)
-                            },
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-
-                // Reset Firebase URL Button
-                OutlinedButton(
-                    onClick = { showResetConfirmDialog = true },
-                    shape = MaterialTheme.shapes.small,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.55f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("reset_url_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.LinkOff,
-                        contentDescription = stringResource(R.string.cd_reset_url),
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.dashboard_reset_url_button),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
 
-    // Material 3 Release Date Picker Dialog (converts selected date to local 00:00:00 start of day)
+    // Material 3 Release Date Picker Dialog
     if (showDatePicker) {
-        val initialUtcDateMillis = if (uiState.releaseDateMillis > 0L) {
-            localStartOfDayToUtcDatePickerMillis(uiState.releaseDateMillis)
+        val initialUtcDateMillis = if (uiState.config.releaseDateMillis > 0L) {
+            localStartOfDayToUtcDatePickerMillis(uiState.config.releaseDateMillis)
         } else {
             null
         }
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = initialUtcDateMillis
-        )
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialUtcDateMillis)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -739,12 +372,7 @@ fun AdminDashboard(
         AlertDialog(
             onDismissRequest = { showResetConfirmDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            title = {
-                Text(
-                    text = stringResource(R.string.dialog_reset_title),
-                    style = MaterialTheme.typography.titleLarge
-                )
-            },
+            title = { Text(stringResource(R.string.dialog_reset_title), style = MaterialTheme.typography.titleLarge) },
             text = {
                 Text(
                     text = stringResource(R.string.dialog_reset_message),
@@ -760,10 +388,7 @@ fun AdminDashboard(
                     },
                     modifier = Modifier.testTag("confirm_reset_url_button")
                 ) {
-                    Text(
-                        text = stringResource(R.string.dialog_confirm_reset),
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text(stringResource(R.string.dialog_confirm_reset), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -777,18 +402,9 @@ fun AdminDashboard(
     // Import Latest APK from GitHub Releases Dialog
     if (showGitHubDialog) {
         AlertDialog(
-            onDismissRequest = {
-                if (!uiState.isFetchingGitHubRelease) {
-                    showGitHubDialog = false
-                }
-            },
+            onDismissRequest = { if (!uiState.isFetchingGitHubRelease) showGitHubDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            title = {
-                Text(
-                    text = stringResource(R.string.dialog_github_title),
-                    style = MaterialTheme.typography.titleLarge
-                )
-            },
+            title = { Text(stringResource(R.string.dialog_github_title), style = MaterialTheme.typography.titleLarge) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
@@ -806,18 +422,14 @@ fun AdminDashboard(
                         placeholder = {
                             Text(
                                 text = stringResource(R.string.dialog_github_repo_placeholder),
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = JetBrainsMonoFontFamily
-                                )
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFontFamily)
                             )
                         },
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = JetBrainsMonoFontFamily
-                        ),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMonoFontFamily),
                         singleLine = true,
                         isError = uiState.githubFetchError != null,
                         shape = MaterialTheme.shapes.small,
-                        colors = dashboardTextFieldColors(),
+                        colors = adminTextFieldColors(),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("github_repo_input")
@@ -834,41 +446,49 @@ fun AdminDashboard(
             confirmButton = {
                 TextButton(
                     enabled = githubRepoInput.isNotBlank() && !uiState.isFetchingGitHubRelease,
-                    onClick = {
-                        onFetchGitHubRelease(githubRepoInput) {
-                            showGitHubDialog = false
-                        }
-                    },
+                    onClick = { onFetchGitHubRelease(githubRepoInput) { showGitHubDialog = false } },
                     modifier = Modifier.testTag("confirm_github_fetch_button")
                 ) {
                     if (uiState.isFetchingGitHubRelease) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(stringResource(R.string.dialog_github_fetching))
                     } else {
-                        Text(
-                            text = stringResource(R.string.dialog_github_fetch_button),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Text(stringResource(R.string.dialog_github_fetch_button), color = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
             dismissButton = {
-                TextButton(
-                    enabled = !uiState.isFetchingGitHubRelease,
-                    onClick = { showGitHubDialog = false }
-                ) {
+                TextButton(enabled = !uiState.isFetchingGitHubRelease, onClick = { showGitHubDialog = false }) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
             }
         )
     }
 
-    // Firebase Security Rules Reference Sheet
+    // Live Preview Modal Sheet (accessible anytime from any tab)
+    if (showPreviewSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showPreviewSheet = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                DialogPreviewPane(config = uiState.config)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+
+    // Firebase Security Rules Sheet
     if (showRulesSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -883,11 +503,7 @@ fun AdminDashboard(
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.rules_sheet_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Text(stringResource(R.string.rules_sheet_title), style = MaterialTheme.typography.titleLarge)
                 Text(
                     text = stringResource(R.string.rules_sheet_subtitle),
                     style = MaterialTheme.typography.bodySmall,
@@ -916,31 +532,420 @@ fun AdminDashboard(
                 Button(
                     onClick = {
                         clipboardManager.setText(AnnotatedString(FirebaseConstants.SECURITY_RULES_JSON))
-                        onRulesCopied(rulesCopiedMessage)
+                        onNotify(rulesCopiedMessage)
                         showRulesSheet = false
                     },
                     shape = MaterialTheme.shapes.small,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.rules_copy_button),
-                        style = MaterialTheme.typography.labelLarge
-                    )
+                    Text(stringResource(R.string.rules_copy_button), style = MaterialTheme.typography.labelLarge)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorTabBody(
+    tab: DashboardTab,
+    uiState: AdminUiState,
+    onUpdateConfig: ((UpdateConfig) -> UpdateConfig) -> Unit,
+    onUpdateUiConfig: ((DialogUiConfig) -> DialogUiConfig) -> Unit,
+    onTitleChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onReleaseImmediatelySelected: () -> Unit,
+    onPickScheduledDateClick: () -> Unit,
+    onOpenGitHubDialog: () -> Unit,
+    onUpsertExtraButton: (DialogButtonConfig, Int?) -> Unit,
+    onDeleteExtraButton: (Int) -> Unit,
+    onMoveExtraButton: (Int, Int) -> Unit,
+    onToggleCustomBlockOrder: (Boolean) -> Unit,
+    onAddUiBlock: (String) -> Unit,
+    onRemoveUiBlock: (Int) -> Unit,
+    onMoveUiBlock: (Int, Int) -> Unit,
+    onNotify: (String) -> Unit
+) {
+    when (tab) {
+        DashboardTab.MODE_CONTENT -> ModeAndContentTab(
+            uiState = uiState,
+            onUpdateConfig = onUpdateConfig,
+            onUpdateUi = onUpdateUiConfig,
+            onTitleChange = onTitleChange,
+            onDescriptionChange = onDescriptionChange,
+            onReleaseImmediatelyClick = onReleaseImmediatelySelected,
+            onPickScheduledDateClick = onPickScheduledDateClick,
+            onOpenGitHubDialog = onOpenGitHubDialog,
+            onNotify = onNotify
+        )
+
+        DashboardTab.LAYOUT_MEDIA -> LayoutAndMediaTab(
+            uiConfig = uiState.config.uiConfig,
+            onUpdateUi = onUpdateUiConfig
+        )
+
+        DashboardTab.COLORS_THEME -> ColorsAndThemeTab(
+            uiConfig = uiState.config.uiConfig,
+            onUpdateUi = onUpdateUiConfig
+        )
+
+        DashboardTab.BUTTONS_BLOCKS -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            PrimaryAndDismissButtonsCard(
+                uiConfig = uiState.config.uiConfig,
+                onUpdateUi = onUpdateUiConfig
+            )
+            ExtraButtonsBuilderCard(
+                buttons = uiState.config.uiConfig.buttons,
+                buttonClicks = uiState.config.buttonClicks,
+                onUpsertButton = onUpsertExtraButton,
+                onDeleteButton = onDeleteExtraButton,
+                onMoveButton = onMoveExtraButton
+            )
+            CustomBlockOrderingCard(
+                isCustomOrderEnabled = uiState.isCustomBlockOrderEnabled,
+                blocks = uiState.config.uiConfig.uiBlocks,
+                onToggleCustomOrder = onToggleCustomBlockOrder,
+                onAddBlock = onAddUiBlock,
+                onRemoveBlock = onRemoveUiBlock,
+                onMoveBlock = onMoveUiBlock
+            )
+        }
+
+        DashboardTab.LIVE_PREVIEW -> DialogPreviewPane(config = uiState.config)
+    }
+}
+
+@Composable
+private fun DashboardTopHeader(
+    status: ConnectionStatus,
+    endpointLabel: String,
+    isRefreshing: Boolean,
+    onRefreshClick: () -> Unit,
+    onRulesClick: () -> Unit,
+    onQuickPreviewClick: () -> Unit,
+    onResetUrlClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.img_command_header),
+            contentDescription = stringResource(R.string.cd_header_banner),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .matchParentSize()
+                .alpha(0.38f)
+        )
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.55f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                ConnectionStatusPill(status = status)
+
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    IconButton(onClick = onQuickPreviewClick) {
+                        Icon(
+                            imageVector = Icons.Rounded.Visibility,
+                            contentDescription = "Quick Dialog Preview",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
+                        onClick = onRefreshClick,
+                        enabled = !isRefreshing,
+                        modifier = Modifier.testTag("refresh_button")
+                    ) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = stringResource(R.string.cd_refresh_data),
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onRulesClick,
+                        modifier = Modifier.testTag("view_rules_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Shield,
+                            contentDescription = stringResource(R.string.cd_view_rules),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    IconButton(onClick = onResetUrlClick) {
+                        Icon(
+                            imageVector = Icons.Rounded.LinkOff,
+                            contentDescription = stringResource(R.string.cd_reset_url),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.app_full_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = endpointLabel,
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                color = MaterialTheme.colorScheme.tertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun PresetsAndQuickActionsStrip(
+    onApplyPreset: (DialogPreset) -> Unit,
+    onResetUiToDefault: () -> Unit,
+    onDisableDialogQuickly: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        DialogPreset.entries.forEach { preset ->
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onApplyPreset(preset) }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoFixHigh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = preset.label,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)),
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onResetUiToDefault)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.RestartAlt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "Reset to Default",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onDisableDialogQuickly)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PowerOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "Disable Dialog",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardTabsRow(
+    tabs: List<DashboardTab>,
+    selectedTab: DashboardTab,
+    onTabSelected: (DashboardTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        tabs.forEach { tab ->
+            val selected = tab == selectedTab
+            Surface(
+                shape = CircleShape,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                ),
+                modifier = Modifier
+                    .height(38.dp)
+                    .clip(CircleShape)
+                    .clickable { onTabSelected(tab) }
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StickySaveBottomBar(
+    isSaving: Boolean,
+    hasUnsavedChanges: Boolean,
+    onSaveClick: () -> Unit,
+    onPreviewClick: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = onPreviewClick,
+                shape = MaterialTheme.shapes.medium,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                modifier = Modifier.height(50.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Visibility,
+                    contentDescription = "Preview",
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Preview", color = MaterialTheme.colorScheme.tertiary)
+            }
+
+            Button(
+                onClick = onSaveClick,
+                enabled = !isSaving,
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .testTag("save_to_firebase_button")
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.dashboard_saving), style = MaterialTheme.typography.labelLarge)
+                } else {
+                    Icon(Icons.Rounded.CloudUpload, null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (hasUnsavedChanges) {
+                            "${stringResource(R.string.dashboard_save_button)} •"
+                        } else {
+                            stringResource(R.string.dashboard_save_button)
+                        },
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }
@@ -1007,307 +1012,6 @@ private fun ConnectionStatusPill(
     }
 }
 
-@Composable
-private fun DownloadClicksTelemetryCard(
-    downloadClicks: Long,
-    modifier: Modifier = Modifier
-) {
-    val formattedClicks = NumberFormat.getIntegerInstance(Locale.US).format(downloadClicks)
-
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)),
-        modifier = modifier.testTag("total_download_clicks_card")
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
-                            MaterialTheme.colorScheme.surfaceContainer
-                        )
-                    )
-                )
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = stringResource(R.string.dashboard_total_clicks_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-                Text(
-                    text = formattedClicks,
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontFamily = JetBrainsMonoFontFamily,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "/${FirebaseConstants.UPDATE_NODE_PATH}/${FirebaseConstants.FIELD_DOWNLOAD_CLICKS}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)),
-                modifier = Modifier.size(54.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Rounded.DownloadForOffline,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReleaseScheduleCard(
-    releaseDate: String,
-    releaseDateMillis: Long,
-    onReleaseImmediatelyClick: () -> Unit,
-    onPickScheduledDateClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val isScheduled = releaseDateMillis > 0L
-    val isFutureRelease = isScheduled && releaseDateMillis > System.currentTimeMillis()
-
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isScheduled) {
-                MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)
-            } else {
-                MaterialTheme.colorScheme.outline
-            }
-        ),
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Schedule,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.dashboard_release_schedule_header),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                if (isScheduled) {
-                    val badgeColor = if (isFutureRelease) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    }
-                    Surface(
-                        shape = CircleShape,
-                        color = badgeColor.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.45f))
-                    ) {
-                        Text(
-                            text = if (isFutureRelease) {
-                                stringResource(R.string.dashboard_scheduled_future_badge)
-                            } else {
-                                stringResource(R.string.dashboard_scheduled_active_badge)
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = badgeColor,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-
-            // Segmented mode toggle: Release Immediately vs Schedule for Date
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                ScheduleModeOption(
-                    label = stringResource(R.string.dashboard_release_immediately),
-                    icon = Icons.Rounded.FlashOn,
-                    selected = !isScheduled,
-                    accentColor = MaterialTheme.colorScheme.primary,
-                    onClick = onReleaseImmediatelyClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("release_immediately_option")
-                )
-
-                ScheduleModeOption(
-                    label = stringResource(R.string.dashboard_schedule_for_date),
-                    icon = Icons.Rounded.CalendarMonth,
-                    selected = isScheduled,
-                    accentColor = MaterialTheme.colorScheme.tertiary,
-                    onClick = onPickScheduledDateClick,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("schedule_for_date_option")
-                )
-            }
-
-            if (isScheduled) {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable(onClick = onPickScheduledDateClick)
-                        .testTag("release_date_picker_button")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.dashboard_release_date_label),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                            Text(
-                                text = "${releaseDate.ifBlank { "Scheduled" }}  •  00:00:00",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontFamily = JetBrainsMonoFontFamily
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "releaseDateMillis: $releaseDateMillis",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Rounded.CalendarMonth,
-                            contentDescription = stringResource(R.string.cd_pick_date),
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            } else {
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.FlashOn,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.dashboard_immediate_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScheduleModeOption(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    selected: Boolean,
-    accentColor: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (selected) {
-            accentColor.copy(alpha = 0.16f)
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (selected) accentColor.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outline
-        ),
-        modifier = modifier
-            .height(48.dp)
-            .clip(MaterialTheme.shapes.small)
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (selected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = if (selected) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-/**
- * Converts a Material 3 DatePicker UTC midnight timestamp into the exact local start-of-day
- * (00:00:00.000) timestamp in milliseconds for that selected calendar date.
- */
 private fun utcDatePickerMillisToLocalStartOfDay(selectedUtcMillis: Long): Long {
     val utcCalendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
         timeInMillis = selectedUtcMillis
@@ -1323,10 +1027,6 @@ private fun utcDatePickerMillisToLocalStartOfDay(selectedUtcMillis: Long): Long 
     }.timeInMillis
 }
 
-/**
- * Converts a stored local start-of-day timestamp back to UTC midnight so Material 3 DatePicker
- * highlights the exact matching calendar date when reopening the picker.
- */
 private fun localStartOfDayToUtcDatePickerMillis(localStartOfDayMillis: Long): Long {
     val localCalendar = Calendar.getInstance().apply {
         timeInMillis = localStartOfDayMillis
@@ -1338,13 +1038,3 @@ private fun localStartOfDayToUtcDatePickerMillis(localStartOfDayMillis: Long): L
         set(Calendar.DAY_OF_MONTH, localCalendar.get(Calendar.DAY_OF_MONTH))
     }.timeInMillis
 }
-
-@Composable
-private fun dashboardTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = MaterialTheme.colorScheme.primary,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-    focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
-)

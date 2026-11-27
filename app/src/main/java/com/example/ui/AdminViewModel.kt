@@ -5,6 +5,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AdminRepository
 import com.example.data.ConnectionStatus
+import com.example.data.DialogButtonConfig
+import com.example.data.DialogOptions
+import com.example.data.DialogPreset
+import com.example.data.DialogUiConfig
 import com.example.data.FirebaseBackendMode
 import com.example.data.PrefsManager
 import com.example.data.UpdateConfig
@@ -23,8 +27,17 @@ enum class AdminScreen {
     Dashboard
 }
 
+enum class DashboardTab(val label: String) {
+    MODE_CONTENT("Mode & Content"),
+    LAYOUT_MEDIA("Layout & Media"),
+    COLORS_THEME("Theme & Colors"),
+    BUTTONS_BLOCKS("Buttons & Blocks"),
+    LIVE_PREVIEW("Live Preview")
+}
+
 data class AdminUiState(
     val currentScreen: AdminScreen = AdminScreen.Setup,
+    val selectedTab: DashboardTab = DashboardTab.MODE_CONTENT,
     val savedDatabaseUrl: String = "",
     val backendMode: FirebaseBackendMode = FirebaseBackendMode.REST_API,
 
@@ -35,16 +48,8 @@ data class AdminUiState(
 
     // Dashboard state
     val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTING,
-    val isEnabled: Boolean = false,
-    val version: String = "",
-    val title: String = "",
-    val description: String = "",
-    val apkUrl: String = "",
-    val releaseDate: String = "",
-    val releaseDateMillis: Long = 0L,
-    val isMandatory: Boolean = false,
-    val downloadClicks: Long = 0L,
-    val lastUpdatedAt: Long = 0L,
+    val config: UpdateConfig = UpdateConfig(),
+    val isCustomBlockOrderEnabled: Boolean = false,
     val hasHydratedFromRemote: Boolean = false,
     val hasUnsavedChanges: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -125,7 +130,11 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Dashboard Actions ---
+    fun onTabSelected(tab: DashboardTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+    }
+
+    // --- Live Firebase Sync ---
 
     private fun startObservingDatabase() {
         stopObservingDatabase()
@@ -134,28 +143,21 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { state ->
                     val remote = snapshot.config
                     if (remote != null && (!state.hasHydratedFromRemote || !state.hasUnsavedChanges)) {
-                        val resolvedReleaseDate = remote.releaseDate.ifBlank {
-                            if (remote.releaseDateMillis > 0L) formatDateMillis(remote.releaseDateMillis) else ""
-                        }
+                        val hydrated = hydrateRemoteConfig(remote)
                         state.copy(
                             connectionStatus = snapshot.status,
-                            isEnabled = remote.isEnabled,
-                            version = remote.version,
-                            title = remote.title,
-                            description = remote.description,
-                            apkUrl = remote.apkUrl,
-                            releaseDate = resolvedReleaseDate,
-                            releaseDateMillis = remote.releaseDateMillis,
-                            isMandatory = remote.isMandatory,
-                            downloadClicks = remote.downloadClicks,
-                            lastUpdatedAt = remote.updatedAt,
+                            config = hydrated,
+                            isCustomBlockOrderEnabled = hydrated.uiConfig.uiBlocks.isNotEmpty(),
                             hasHydratedFromRemote = true,
                             isRefreshing = false
                         )
                     } else if (remote != null) {
                         state.copy(
                             connectionStatus = snapshot.status,
-                            downloadClicks = remote.downloadClicks,
+                            config = state.config.copy(
+                                downloadClicks = remote.downloadClicks,
+                                buttonClicks = remote.buttonClicks
+                            ),
                             isRefreshing = false
                         )
                     } else {
@@ -181,21 +183,11 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { state ->
                 val remote = snapshot.config
                 if (remote != null) {
-                    val resolvedReleaseDate = remote.releaseDate.ifBlank {
-                        if (remote.releaseDateMillis > 0L) formatDateMillis(remote.releaseDateMillis) else ""
-                    }
+                    val hydrated = hydrateRemoteConfig(remote)
                     state.copy(
                         connectionStatus = snapshot.status,
-                        isEnabled = remote.isEnabled,
-                        version = remote.version,
-                        title = remote.title,
-                        description = remote.description,
-                        apkUrl = remote.apkUrl,
-                        releaseDate = resolvedReleaseDate,
-                        releaseDateMillis = remote.releaseDateMillis,
-                        isMandatory = remote.isMandatory,
-                        downloadClicks = remote.downloadClicks,
-                        lastUpdatedAt = remote.updatedAt,
+                        config = hydrated,
+                        isCustomBlockOrderEnabled = hydrated.uiConfig.uiBlocks.isNotEmpty(),
                         hasHydratedFromRemote = true,
                         hasUnsavedChanges = false,
                         isRefreshing = false,
@@ -212,86 +204,223 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onUpdateEnabledChanged(enabled: Boolean) {
-        _uiState.update { it.copy(isEnabled = enabled, hasUnsavedChanges = true) }
+    private fun hydrateRemoteConfig(remote: UpdateConfig): UpdateConfig {
+        val resolvedDate = remote.releaseDate.ifBlank {
+            if (remote.releaseDateMillis > 0L) formatDateMillis(remote.releaseDateMillis) else ""
+        }
+        val syncedTitle = remote.uiConfig.title.ifBlank { remote.title }
+        val syncedDesc = remote.uiConfig.description.ifBlank { remote.description }
+        return remote.copy(
+            title = syncedTitle,
+            description = syncedDesc,
+            releaseDate = resolvedDate,
+            uiConfig = remote.uiConfig.copy(
+                title = syncedTitle,
+                description = syncedDesc
+            )
+        )
     }
 
-    fun onVersionChanged(value: String) {
-        _uiState.update { it.copy(version = value, hasUnsavedChanges = true) }
+    // --- Config Mutators ---
+
+    fun updateConfig(transform: (UpdateConfig) -> UpdateConfig) {
+        _uiState.update { state ->
+            state.copy(
+                config = transform(state.config),
+                hasUnsavedChanges = true
+            )
+        }
+    }
+
+    fun updateUiConfig(transform: (DialogUiConfig) -> DialogUiConfig) {
+        _uiState.update { state ->
+            val updatedUi = transform(state.config.uiConfig)
+            state.copy(
+                config = state.config.copy(
+                    title = updatedUi.title,
+                    description = updatedUi.description,
+                    uiConfig = updatedUi
+                ),
+                hasUnsavedChanges = true
+            )
+        }
     }
 
     fun onTitleChanged(value: String) {
-        _uiState.update { it.copy(title = value, hasUnsavedChanges = true) }
+        updateConfig { cfg ->
+            cfg.copy(
+                title = value,
+                uiConfig = cfg.uiConfig.copy(title = value)
+            )
+        }
     }
 
     fun onDescriptionChanged(value: String) {
-        _uiState.update { it.copy(description = value, hasUnsavedChanges = true) }
-    }
-
-    fun onApkUrlChanged(value: String) {
-        _uiState.update { it.copy(apkUrl = value, hasUnsavedChanges = true) }
+        updateConfig { cfg ->
+            cfg.copy(
+                description = value,
+                uiConfig = cfg.uiConfig.copy(description = value)
+            )
+        }
     }
 
     fun onReleaseImmediatelySelected() {
-        _uiState.update {
-            it.copy(
-                releaseDate = "",
-                releaseDateMillis = 0L,
-                hasUnsavedChanges = true
-            )
-        }
+        updateConfig { it.copy(releaseDate = "", releaseDateMillis = 0L) }
     }
 
     fun onReleaseDateSelected(startOfDayMillis: Long) {
-        val formatted = formatDateMillis(startOfDayMillis)
-        _uiState.update {
+        updateConfig {
             it.copy(
-                releaseDate = formatted,
-                releaseDateMillis = startOfDayMillis,
+                releaseDate = formatDateMillis(startOfDayMillis),
+                releaseDateMillis = startOfDayMillis
+            )
+        }
+    }
+
+    // --- Dynamic Extra Buttons CRUD ---
+
+    fun upsertExtraButton(button: DialogButtonConfig, editIndex: Int?) {
+        updateUiConfig { ui ->
+            val mutable = ui.buttons.toMutableList()
+            if (editIndex != null && editIndex in mutable.indices) {
+                mutable[editIndex] = button
+            } else {
+                mutable.add(button)
+            }
+            ui.copy(buttons = mutable)
+        }
+    }
+
+    fun deleteExtraButton(index: Int) {
+        updateUiConfig { ui ->
+            val mutable = ui.buttons.toMutableList()
+            if (index in mutable.indices) mutable.removeAt(index)
+            ui.copy(buttons = mutable)
+        }
+    }
+
+    fun moveExtraButton(index: Int, delta: Int) {
+        updateUiConfig { ui ->
+            val target = index + delta
+            if (index !in ui.buttons.indices || target !in ui.buttons.indices) return@updateUiConfig ui
+            val mutable = ui.buttons.toMutableList()
+            val item = mutable.removeAt(index)
+            mutable.add(target, item)
+            ui.copy(buttons = mutable)
+        }
+    }
+
+    // --- Optional Custom Block Order ---
+
+    fun toggleCustomBlockOrder(enabled: Boolean) {
+        _uiState.update { state ->
+            val nextBlocks = if (enabled) {
+                state.config.uiConfig.uiBlocks.ifEmpty {
+                    listOf(
+                        "badge",
+                        "media",
+                        "title",
+                        "subtitle",
+                        "bullets",
+                        "highlight_box",
+                        "button",
+                        "button_row"
+                    )
+                }
+            } else {
+                emptyList()
+            }
+            state.copy(
+                isCustomBlockOrderEnabled = enabled,
+                config = state.config.copy(
+                    uiConfig = state.config.uiConfig.copy(uiBlocks = nextBlocks)
+                ),
                 hasUnsavedChanges = true
             )
         }
     }
 
-    fun onMandatoryChanged(mandatory: Boolean) {
-        _uiState.update { it.copy(isMandatory = mandatory, hasUnsavedChanges = true) }
+    fun addUiBlock(blockType: String) {
+        updateUiConfig { ui ->
+            ui.copy(uiBlocks = ui.uiBlocks + blockType)
+        }
     }
 
-    fun saveToFirebase() {
-        val state = _uiState.value
-        if (state.isSaving) return
-
-        if (state.version.isBlank()) {
-            _uiState.update { it.copy(snackbarMessage = "Please enter a version number (e.g., 2.0)") }
-            return
+    fun removeUiBlock(index: Int) {
+        updateUiConfig { ui ->
+            val mutable = ui.uiBlocks.toMutableList()
+            if (index in mutable.indices) mutable.removeAt(index)
+            ui.copy(uiBlocks = mutable)
         }
-        if (state.title.isBlank()) {
-            _uiState.update { it.copy(snackbarMessage = "Please enter an update title") }
-            return
-        }
-        if (state.apkUrl.isNotBlank() &&
-            !state.apkUrl.trim().startsWith("https://", ignoreCase = true) &&
-            !state.apkUrl.trim().startsWith("http://", ignoreCase = true)
-        ) {
-            _uiState.update { it.copy(snackbarMessage = "APK Download URL must start with https:// or http://") }
-            return
-        }
+    }
 
-        val config = UpdateConfig(
-            isEnabled = state.isEnabled,
-            version = state.version.trim(),
-            title = state.title.trim(),
-            description = state.description.trim(),
-            apkUrl = state.apkUrl.trim(),
-            releaseDate = state.releaseDate.trim(),
-            releaseDateMillis = state.releaseDateMillis,
-            isMandatory = state.isMandatory,
-            downloadClicks = state.downloadClicks
-        )
+    fun moveUiBlock(index: Int, delta: Int) {
+        updateUiConfig { ui ->
+            val target = index + delta
+            if (index !in ui.uiBlocks.indices || target !in ui.uiBlocks.indices) return@updateUiConfig ui
+            val mutable = ui.uiBlocks.toMutableList()
+            val item = mutable.removeAt(index)
+            mutable.add(target, item)
+            ui.copy(uiBlocks = mutable)
+        }
+    }
 
+    // --- Quick Presets & Actions ---
+
+    fun applyPreset(preset: DialogPreset) {
+        _uiState.update { state ->
+            val presetConfig = preset.buildConfig(state.config)
+            state.copy(
+                config = presetConfig,
+                isCustomBlockOrderEnabled = presetConfig.uiConfig.uiBlocks.isNotEmpty(),
+                hasUnsavedChanges = true,
+                snackbarMessage = "Applied preset: ${preset.label}"
+            )
+        }
+    }
+
+    fun resetUiToDefault() {
+        _uiState.update { state ->
+            val preservedClicks = state.config.downloadClicks
+            val preservedBtnClicks = state.config.buttonClicks
+            val defaultConfig = UpdateConfig(
+                isEnabled = state.config.isEnabled,
+                dialogMode = DialogOptions.MODE_UPDATE,
+                version = state.config.version,
+                apkUrl = state.config.apkUrl,
+                title = state.config.title,
+                description = state.config.description,
+                releaseDate = state.config.releaseDate,
+                releaseDateMillis = state.config.releaseDateMillis,
+                downloadClicks = preservedClicks,
+                buttonClicks = preservedBtnClicks,
+                uiConfig = DialogUiConfig(
+                    title = state.config.title,
+                    description = state.config.description,
+                    primaryButtonUrl = state.config.apkUrl
+                )
+            )
+            state.copy(
+                config = defaultConfig,
+                isCustomBlockOrderEnabled = false,
+                hasUnsavedChanges = true,
+                snackbarMessage = "Reset UI styling & blocks to default"
+            )
+        }
+    }
+
+    fun disableDialogQuickly() {
+        val current = _uiState.value
+        if (current.isSaving) return
+        val disabledConfig = current.config.copy(isEnabled = false)
+        _uiState.update {
+            it.copy(
+                config = disabledConfig,
+                isSaving = true
+            )
+        }
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
-            val result = repository.saveUpdateConfig(config)
+            val result = repository.saveUpdateConfig(disabledConfig)
             result.fold(
                 onSuccess = {
                     _uiState.update {
@@ -299,8 +428,58 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                             isSaving = false,
                             hasUnsavedChanges = false,
                             connectionStatus = ConnectionStatus.CONNECTED,
-                            lastUpdatedAt = System.currentTimeMillis(),
-                            snackbarMessage = "Saved to /battery_boss_update/ successfully"
+                            snackbarMessage = "Dialog disabled live on Firebase"
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            hasUnsavedChanges = true,
+                            snackbarMessage = error.message ?: "Failed to disable dialog"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    // --- Save to Firebase ---
+
+    fun saveToFirebase() {
+        val state = _uiState.value
+        if (state.isSaving) return
+        val cfg = state.config
+
+        if (cfg.dialogMode == DialogOptions.MODE_UPDATE && cfg.isEnabled && cfg.version.isBlank()) {
+            _uiState.update { it.copy(snackbarMessage = "Enter a version number for Update Mode (e.g. 2.0)") }
+            return
+        }
+        if (cfg.title.isBlank() && cfg.uiConfig.title.isBlank()) {
+            _uiState.update { it.copy(snackbarMessage = "Please enter a dialog title") }
+            return
+        }
+        if (cfg.apkUrl.isNotBlank() &&
+            !cfg.apkUrl.trim().startsWith("https://", ignoreCase = true) &&
+            !cfg.apkUrl.trim().startsWith("http://", ignoreCase = true)
+        ) {
+            _uiState.update { it.copy(snackbarMessage = "APK URL must start with https:// or http://") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+            val result = repository.saveUpdateConfig(cfg)
+            result.fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            hasUnsavedChanges = false,
+                            connectionStatus = ConnectionStatus.CONNECTED,
+                            config = it.config.copy(updatedAt = System.currentTimeMillis()),
+                            snackbarMessage = "Saved full UI & update config to Firebase"
                         )
                     }
                 },
@@ -336,13 +515,24 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { release ->
                     _uiState.update { state ->
+                        val nextTitle = release.title.ifBlank { state.config.title }
+                        val nextDesc = release.description.ifBlank { state.config.description }
                         state.copy(
                             isFetchingGitHubRelease = false,
                             githubFetchError = null,
-                            apkUrl = release.apkDownloadUrl,
-                            version = release.version.ifBlank { state.version },
-                            title = release.title.ifBlank { state.title },
-                            description = release.description.ifBlank { state.description },
+                            config = state.config.copy(
+                                apkUrl = release.apkDownloadUrl,
+                                version = release.version.ifBlank { state.config.version },
+                                title = nextTitle,
+                                description = nextDesc,
+                                uiConfig = state.config.uiConfig.copy(
+                                    title = nextTitle,
+                                    description = nextDesc,
+                                    primaryButtonUrl = state.config.uiConfig.primaryButtonUrl.ifBlank {
+                                        release.apkDownloadUrl
+                                    }
+                                )
+                            ),
                             hasUnsavedChanges = true,
                             snackbarMessage = "Imported ${release.assetFileName} from GitHub"
                         )
