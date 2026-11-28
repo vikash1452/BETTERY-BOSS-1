@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "ADMIN"
+rootProject.name = "Battery Boss Admin"
 
 include(":app")
