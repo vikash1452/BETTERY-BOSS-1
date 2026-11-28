@@ -1,6 +1,6 @@
 {
-  "name": "Battery Boss Admin",
-  "description": "Private admin control panel for managing Battery Boss app updates, force-update toggles, release metadata, and download analytics directly via Firebase Realtime Database.",
+  "name": "ADMIN",
+  "description": "Material 3 Admin Panel UI application featuring Splash, Profile Setup, Firebase URL Setup, Navigation Drawer, Home Controls, App Dashboard, Link Manager, and DayNight Settings.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
